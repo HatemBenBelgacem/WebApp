@@ -1,19 +1,21 @@
 # Stage 1: Build
 FROM rust:1-slim-bookworm AS builder
 
+# System-Abhängigkeiten
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN cargo install dioxus-cli --version 0.6.0
+# Installiere cargo-binstall und darüber das Dioxus-CLI (schnell & stabil)
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+RUN cargo binstall -y dioxus-cli --version 0.6.0
 
 WORKDIR /usr/src/app
-# Kopiere alle Dateien in das Arbeitsverzeichnis
 COPY . .
 
-# Build für Fullstack (erzeugt Binary und WASM-Assets im /dist Ordner)
+# Build für Fullstack (erzeugt Binary und Assets)
 RUN dx build --release --platform fullstack
 
 # Stage 2: Runtime
@@ -26,10 +28,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Kopiere das Binary (Name muss mit 'name' in Cargo.toml übereinstimmen)
+# Kopiere das Binary und den dist-Ordner
 COPY --from=builder /usr/src/app/target/release/web-app /app/server
-
-# Kopiere die Web-Assets
 COPY --from=builder /usr/src/app/dist /app/dist
 
 ENV PORT=8080
