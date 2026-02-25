@@ -7,18 +7,25 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# WebAssembly Target für das Frontend hinzufügen
 RUN rustup target add wasm32-unknown-unknown
 
-# Dioxus CLI installieren
+# 1. Installiere binstall
 RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+# 2. Installiere Dioxus CLI
 RUN cargo binstall -y dioxus-cli --version 0.6.0
+
+# 3. WICHTIG: Installiere die passende wasm-bindgen-cli Version
+# Dies behebt den "schema version mismatch" Fehler
+RUN cargo binstall -y wasm-bindgen-cli --version 0.2.113
 
 WORKDIR /usr/src/app
 COPY . .
 
-# WICHTIG: Wir bauen erst das Web-Frontend und dann den Server, 
-# um sicherzugehen, dass der 'dist' Ordner existiert.
+# Bevor wir bauen, stellen wir sicher, dass die Abhängigkeiten frisch sind
+RUN cargo update
+
+# Build für Fullstack
 RUN dx build --release --platform web
 RUN dx build --release --platform server
 
@@ -32,15 +39,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Kopiere das Binary aus dem Release-Ordner
+# Kopiere das Binary und die Web-Assets
 COPY --from=builder /usr/src/app/target/release/web-app /app/server
-
-# Kopiere den nun existierenden dist-Ordner (Frontend-Assets)
 COPY --from=builder /usr/src/app/dist /app/dist
 
-# Railway Umgebung
 ENV PORT=8080
 EXPOSE 8080
 
-# Starte den Server
 CMD ["/app/server"]
